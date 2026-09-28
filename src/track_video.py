@@ -1,5 +1,6 @@
 from collections import defaultdict, deque
 from pathlib import Path
+from zone import draw_zone, get_zone_polygon, is_point_inside_zone
 import shutil
 import subprocess
 import time
@@ -214,7 +215,10 @@ def main() -> None:
             cv2.CAP_PROP_FRAME_HEIGHT
         )
     )
-
+    zone_polygon = get_zone_polygon(
+    frame_width,
+    frame_height,
+)
     source_fps = float(
         video_capture.get(
             cv2.CAP_PROP_FPS
@@ -365,6 +369,10 @@ def main() -> None:
             # -------------------------------------------------
 
             annotated_frame = result.plot()
+            draw_zone(
+    annotated_frame,
+    zone_polygon,
+)
 
             boxes = result.boxes
 
@@ -389,17 +397,42 @@ def main() -> None:
                     .cpu()
                     .tolist()
                 )
+                bounding_boxes = boxes.xyxy.cpu().tolist()
 
-                for box, track_id in zip(
+                for box,bbox, track_id in zip(
                     box_centers,
+                    bounding_boxes,
                     track_ids,
                 ):
 
                     center_x = int(box[0])
                     center_y = int(box[1])
+                    x1, y1, x2, y2 = bbox
+
+                    zone_point = (
+                        int((x1 + x2) / 2),
+                        int(y2),
+                    )
+
+                    inside_zone = is_point_inside_zone(
+                        zone_point,
+                        zone_polygon,
+                    )
+                    if inside_zone:
+                        point_color = (0, 255, 0)
+                    else:
+                        point_color = (0, 0, 255)
+
+                    cv2.circle(
+                        annotated_frame,
+                        zone_point,
+                        radius=6,
+                        color=point_color,
+                        thickness=-1,
+                    )
 
                     track_history[
-                        track_id
+                    track_id
                     ].append(
                         (
                             center_x,
