@@ -22,27 +22,9 @@ from zone import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-INPUT_VIDEO = (
-    PROJECT_ROOT
-    / "data"
-    / "input"
-    / "test_video.mp4"
-)
-
-TEMP_VIDEO = (
-    PROJECT_ROOT
-    / "data"
-    / "output"
-    / "tracked_video_temp.avi"
-)
-
-OUTPUT_VIDEO = (
-    PROJECT_ROOT
-    / "data"
-    / "output"
-    / "tracked_video.mp4"
-)
-
+INPUT_VIDEO = PROJECT_ROOT / "data" / "input" / "test_video.mp4"
+TEMP_VIDEO = PROJECT_ROOT / "data" / "output" / "tracked_video_temp.avi"
+OUTPUT_VIDEO = PROJECT_ROOT / "data" / "output" / "tracked_video.mp4"
 MODEL_PATH = PROJECT_ROOT / "yolo11n.pt"
 
 
@@ -57,15 +39,7 @@ MODEL_PATH = PROJECT_ROOT / "yolo11n.pt"
 # 3 = motorcycle
 # 5 = bus
 # 7 = truck
-
-TARGET_CLASSES = [
-    0,
-    1,
-    2,
-    3,
-    5,
-    7,
-]
+TARGET_CLASSES = [0, 1, 2, 3, 5, 7]
 
 CONFIDENCE_THRESHOLD = 0.35
 IMAGE_SIZE = 640
@@ -73,8 +47,18 @@ IMAGE_SIZE = 640
 TRAIL_LENGTH = 40
 
 # Zone state değişikliği gerçek event sayılmadan önce
-# yeni durumun kaç gözlem boyunca devam etmesi gerektiği.
+# yeni durumun kaç ardışık frame boyunca sürmesi gerektiği.
 ZONE_CONFIRM_FRAMES = 3
+
+# Test videomuz kısa olduğu için demo threshold.
+LOITERING_THRESHOLD_SECONDS = 3.0
+
+# Motion direction hesaplaması için son N frame.
+MOTION_HISTORY_LENGTH = 8
+
+# Zone merkezine olan mesafe değişimi,
+# görüntü köşegeninin bu oranından küçükse STABLE.
+MOTION_MIN_DELTA_RATIO = 0.01
 
 
 # =========================================================
@@ -82,11 +66,9 @@ ZONE_CONFIRM_FRAMES = 3
 # =========================================================
 
 WARMUP_RUNS = 3
-
 FPS_WINDOW = 30
 
-# İlk gerçek frameler benchmark ortalamasına
-# dahil edilmiyor.
+# İlk birkaç gerçek frame benchmark ortalamasına katılmayacak.
 BENCHMARK_SKIP_FRAMES = 5
 
 
@@ -97,10 +79,8 @@ BENCHMARK_SKIP_FRAMES = 5
 def synchronize_cuda() -> None:
     """
     CUDA aktifse GPU işlemlerinin bitmesini bekler.
-
     Doğru latency ölçümü için kullanılır.
     """
-
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
@@ -112,28 +92,17 @@ def warm_up_model(
     frame_height: int,
 ) -> None:
     """
-    Benchmark başlamadan önce modeli birkaç kez çalıştırır.
-
-    Böylece ilk inference initialization maliyeti
-    benchmark sonucunu gereksiz şekilde bozmaz.
+    Gerçek benchmark başlamadan önce modeli birkaç kez çalıştırır.
+    Böylece ilk inference initialization maliyeti benchmark'ı bozmaz.
     """
-
-    print(
-        "GPU/model warm-up başlatılıyor..."
-    )
+    print("GPU/model warm-up başlatılıyor...")
 
     dummy_frame = np.zeros(
-        (
-            frame_height,
-            frame_width,
-            3,
-        ),
+        (frame_height, frame_width, 3),
         dtype=np.uint8,
     )
 
-    for run_number in range(
-        WARMUP_RUNS
-    ):
+    for run_number in range(WARMUP_RUNS):
         model.predict(
             source=dummy_frame,
             device=device,
@@ -147,17 +116,11 @@ def warm_up_model(
 
         print(
             f"Warm-up: "
-            f"{run_number + 1}/"
-            f"{WARMUP_RUNS}"
+            f"{run_number + 1}/{WARMUP_RUNS}"
         )
 
-    print(
-        "Warm-up tamamlandı."
-    )
-
-    print(
-        "=" * 60
-    )
+    print("Warm-up tamamlandı.")
+    print("=" * 60)
 
 
 def convert_to_mp4(
@@ -165,20 +128,14 @@ def convert_to_mp4(
     output_path: Path,
 ) -> None:
     """
-    Geçici MJPG AVI dosyasını
-    H.264 MP4 dosyasına dönüştürür.
+    Geçici MJPG AVI dosyasını FFmpeg ile H.264 MP4'e çevirir.
     """
-
-    ffmpeg_path = shutil.which(
-        "ffmpeg"
-    )
+    ffmpeg_path = shutil.which("ffmpeg")
 
     if ffmpeg_path is None:
         raise RuntimeError(
             "FFmpeg bulunamadı. "
-            "Terminalde "
-            "'ffmpeg -version' "
-            "çalışıyor mu kontrol et."
+            "Terminalde 'ffmpeg -version' çalışıyor mu kontrol et."
         )
 
     command = [
@@ -201,27 +158,16 @@ def convert_to_mp4(
     ]
 
     print()
-
-    print(
-        "=" * 60
-    )
-
-    print(
-        "FFMPEG DÖNÜŞÜMÜ"
-    )
-
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
+    print("FFMPEG DÖNÜŞÜMÜ")
+    print("=" * 60)
 
     subprocess.run(
         command,
         check=True,
     )
 
-    print(
-        "MP4 dönüşümü tamamlandı."
-    )
+    print("MP4 dönüşümü tamamlandı.")
 
 
 # =========================================================
@@ -236,14 +182,12 @@ def main() -> None:
 
     if not INPUT_VIDEO.exists():
         raise FileNotFoundError(
-            f"Video bulunamadı:\n"
-            f"{INPUT_VIDEO}"
+            f"Video bulunamadı:\n{INPUT_VIDEO}"
         )
 
     if not MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"YOLO modeli bulunamadı:\n"
-            f"{MODEL_PATH}"
+            f"YOLO modeli bulunamadı:\n{MODEL_PATH}"
         )
 
     OUTPUT_VIDEO.parent.mkdir(
@@ -252,33 +196,26 @@ def main() -> None:
     )
 
     device: int | str = (
-        0
-        if torch.cuda.is_available()
-        else "cpu"
+        0 if torch.cuda.is_available() else "cpu"
     )
 
     # -----------------------------------------------------
     # 2. MODEL LOAD
     # -----------------------------------------------------
 
-    model = YOLO(
-        str(MODEL_PATH)
-    )
+    model = YOLO(str(MODEL_PATH))
 
     # -----------------------------------------------------
     # 3. VIDEO INPUT
     # -----------------------------------------------------
 
-    video_capture = (
-        cv2.VideoCapture(
-            str(INPUT_VIDEO)
-        )
+    video_capture = cv2.VideoCapture(
+        str(INPUT_VIDEO)
     )
 
     if not video_capture.isOpened():
         raise RuntimeError(
-            "Video OpenCV tarafından "
-            "açılamadı."
+            "Video OpenCV tarafından açılamadı."
         )
 
     frame_width = int(
@@ -305,66 +242,47 @@ def main() -> None:
         )
     )
 
-    zone_polygon = (
-        get_zone_polygon(
-            frame_width,
-            frame_height,
-        )
-    )
-
     if source_fps <= 0:
         source_fps = 30.0
 
+    zone_polygon = get_zone_polygon(
+        frame_width,
+        frame_height,
+    )
+
+    zone_center = np.mean(
+        zone_polygon,
+        axis=0,
+    )
+
+    frame_diagonal = np.hypot(
+        frame_width,
+        frame_height,
+    )
+
+    motion_min_delta = (
+        MOTION_MIN_DELTA_RATIO
+        * frame_diagonal
+    )
+
     print()
-
-    print(
-        "=" * 60
-    )
-
-    print(
-        "VIDEO TRACKING"
-    )
-
-    print(
-        "=" * 60
-    )
-
-    print(
-        f"Girdi       : "
-        f"{INPUT_VIDEO}"
-    )
-
-    print(
-        f"Çözünürlük  : "
-        f"{frame_width}"
-        f"x"
-        f"{frame_height}"
-    )
-
-    print(
-        f"Kaynak FPS  : "
-        f"{source_fps:.2f}"
-    )
-
-    print(
-        f"Kare sayısı : "
-        f"{total_frames}"
-    )
+    print("=" * 60)
+    print("VIDEO TRACKING")
+    print("=" * 60)
+    print(f"Girdi       : {INPUT_VIDEO}")
+    print(f"Çözünürlük  : {frame_width}x{frame_height}")
+    print(f"Kaynak FPS  : {source_fps:.2f}")
+    print(f"Kare sayısı : {total_frames}")
 
     if torch.cuda.is_available():
         print(
             f"GPU         : "
             f"{torch.cuda.get_device_name(0)}"
         )
-
     else:
-        print(
-            "Cihaz       : CPU"
-        )
+        print("Cihaz       : CPU")
 
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
 
     # -----------------------------------------------------
     # 4. WARM-UP
@@ -381,35 +299,24 @@ def main() -> None:
     # 5. VIDEO OUTPUT
     # -----------------------------------------------------
 
-    codec = (
-        cv2.VideoWriter_fourcc(
-            *"MJPG"
-        )
-    )
+    codec = cv2.VideoWriter_fourcc(*"MJPG")
 
-    video_writer = (
-        cv2.VideoWriter(
-            str(TEMP_VIDEO),
-            codec,
-            source_fps,
-            (
-                frame_width,
-                frame_height,
-            ),
-        )
+    video_writer = cv2.VideoWriter(
+        str(TEMP_VIDEO),
+        codec,
+        source_fps,
+        (frame_width, frame_height),
     )
 
     if not video_writer.isOpened():
-
         video_capture.release()
 
         raise RuntimeError(
-            "Geçici çıktı videosu "
-            "oluşturulamadı."
+            "Geçici çıktı videosu oluşturulamadı."
         )
 
     # -----------------------------------------------------
-    # 6. TRACK / ZONE STATE
+    # 6. TRACK / EVENT STATE
     # -----------------------------------------------------
 
     track_history = defaultdict(
@@ -418,19 +325,28 @@ def main() -> None:
         )
     )
 
-    # Her track'in onaylanmış
-    # inside/outside durumu.
+    # Confirmed zone state.
     zone_state = {}
 
-    # Debounce için aday durum.
+    # Debounce candidate state.
     zone_candidate_state = {}
-
-    # Aday durum kaç kez üst üste
-    # gözlendi?
     zone_candidate_count = {}
 
+    # Loitering state.
+    zone_enter_frame = {}
+    loitering_reported = set()
+
+    # Event counters.
     zone_entry_count = 0
     zone_exit_count = 0
+
+    # Motion direction için her track'in
+    # zone merkezine olan son N mesafesi.
+    motion_distance_history = defaultdict(
+        lambda: deque(
+            maxlen=MOTION_HISTORY_LENGTH
+        )
+    )
 
     # -----------------------------------------------------
     # 7. METRICS
@@ -447,24 +363,19 @@ def main() -> None:
     benchmark_frame_count = 0
 
     total_tracking_latency_ms = 0.0
-
     total_inference_latency_ms = 0.0
-
     total_end_to_end_latency_ms = 0.0
 
-    processing_start = (
-        time.perf_counter()
-    )
+    processing_start = time.perf_counter()
 
     # -----------------------------------------------------
     # 8. FRAME LOOP
     # -----------------------------------------------------
 
     try:
-
         while True:
 
-            # End-to-end timer
+            # End-to-end timer burada başlıyor:
             # frame read dahil.
             frame_pipeline_start = (
                 time.perf_counter()
@@ -501,12 +412,9 @@ def main() -> None:
             synchronize_cuda()
 
             tracking_latency_ms = (
-                (
-                    time.perf_counter()
-                    - tracking_start
-                )
-                * 1000
-            )
+                time.perf_counter()
+                - tracking_start
+            ) * 1000
 
             result = results[0]
 
@@ -533,7 +441,7 @@ def main() -> None:
             boxes = result.boxes
 
             # ---------------------------------------------
-            # TRACKS + ZONE EVENT ENGINE
+            # TRACKS + EVENT ENGINE
             # ---------------------------------------------
 
             if (
@@ -585,8 +493,7 @@ def main() -> None:
                         y2,
                     ) = bbox
 
-                    # Bounding box'ın
-                    # bottom-center noktası.
+                    # Bounding box bottom-center.
                     zone_point = (
                         int(
                             (
@@ -606,7 +513,65 @@ def main() -> None:
                     )
 
                     # -------------------------------------
-                    # DEBOUNCED STATE TRANSITION
+                    # MOTION DIRECTION
+                    # -------------------------------------
+
+                    current_distance = float(
+                        np.linalg.norm(
+                            np.array(
+                                zone_point,
+                                dtype=np.float32,
+                            )
+                            - zone_center
+                        )
+                    )
+
+                    motion_distance_history[
+                        track_id
+                    ].append(
+                        current_distance
+                    )
+
+                    motion_direction = (
+                        "STABLE"
+                    )
+
+                    distance_history = (
+                        motion_distance_history[
+                            track_id
+                        ]
+                    )
+
+                    if (
+                        len(distance_history)
+                        >= MOTION_HISTORY_LENGTH
+                    ):
+
+                        distance_change = (
+                            distance_history[-1]
+                            - distance_history[0]
+                        )
+
+                        if (
+                            abs(distance_change)
+                            >= motion_min_delta
+                        ):
+
+                            if (
+                                distance_change
+                                < 0
+                            ):
+                                motion_direction = (
+                                    "APPROACHING"
+                                )
+
+                            else:
+                                motion_direction = (
+                                    "MOVING_AWAY"
+                                )
+
+                    # -------------------------------------
+                    # DEBOUNCED ZONE STATE TRANSITION
                     # -------------------------------------
 
                     if (
@@ -614,8 +579,7 @@ def main() -> None:
                         not in zone_state
                     ):
 
-                        # Nesneyi ilk kez görüyorsak
-                        # bunu ENTRY/EXIT saymıyoruz.
+                        # İlk kez görünüyorsa ENTRY/EXIT yok.
                         zone_state[
                             track_id
                         ] = inside_zone
@@ -628,6 +592,13 @@ def main() -> None:
                             track_id
                         ] = 0
 
+                        # İlk görüldüğünde içerideyse,
+                        # gözlem süresini başlat.
+                        if inside_zone:
+                            zone_enter_frame[
+                                track_id
+                            ] = frame_number + 1
+
                     else:
 
                         confirmed_state = (
@@ -636,15 +607,12 @@ def main() -> None:
                             ]
                         )
 
-                        # Ham durum, onaylanmış
-                        # durumla aynıysa:
                         if (
                             inside_zone
                             == confirmed_state
                         ):
 
-                            # Bekleyen transition
-                            # varsa iptal et.
+                            # Bekleyen transition varsa iptal et.
                             zone_candidate_state[
                                 track_id
                             ] = confirmed_state
@@ -655,10 +623,9 @@ def main() -> None:
 
                         else:
 
-                            # Ham durum değişti.
-                            #
-                            # Daha önce de aynı yeni
-                            # durumu görmüşsek streak +1.
+                            # Yeni ham state,
+                            # önceki candidate ile aynıysa
+                            # streak artır.
                             if (
                                 zone_candidate_state.get(
                                     track_id
@@ -681,8 +648,8 @@ def main() -> None:
                                     track_id
                                 ] = 1
 
-                            # Candidate yeterli sayıda
-                            # gözlendiyse gerçek event.
+                            # Candidate yeterince uzun sürdüyse
+                            # gerçek transition kabul et.
                             if (
                                 zone_candidate_count[
                                     track_id
@@ -695,6 +662,14 @@ def main() -> None:
                                     not confirmed_state
                                     and inside_zone
                                 ):
+
+                                    zone_enter_frame[
+                                        track_id
+                                    ] = frame_number + 1
+
+                                    loitering_reported.discard(
+                                        track_id
+                                    )
 
                                     zone_entry_count += 1
 
@@ -712,6 +687,15 @@ def main() -> None:
                                     and not inside_zone
                                 ):
 
+                                    zone_enter_frame.pop(
+                                        track_id,
+                                        None,
+                                    )
+
+                                    loitering_reported.discard(
+                                        track_id
+                                    )
+
                                     zone_exit_count += 1
 
                                     print(
@@ -722,10 +706,8 @@ def main() -> None:
                                         f"{track_id}"
                                     )
 
-                                # ÖNEMLİ:
-                                # confirmed state SADECE
-                                # confirmation tamamlanınca
-                                # değişiyor.
+                                # Confirmed state SADECE
+                                # confirmation tamamlanınca değişir.
                                 zone_state[
                                     track_id
                                 ] = inside_zone
@@ -739,11 +721,54 @@ def main() -> None:
                                 ] = 0
 
                     # -------------------------------------
+                    # LOITERING EVENT
+                    # -------------------------------------
+
+                    if (
+                        zone_state.get(
+                            track_id
+                        ) is True
+                        and track_id
+                        in zone_enter_frame
+                        and track_id
+                        not in loitering_reported
+                    ):
+
+                        time_inside_seconds = (
+                            (
+                                frame_number
+                                + 1
+                                - zone_enter_frame[
+                                    track_id
+                                ]
+                            )
+                            / source_fps
+                        )
+
+                        if (
+                            time_inside_seconds
+                            >= LOITERING_THRESHOLD_SECONDS
+                        ):
+
+                            loitering_reported.add(
+                                track_id
+                            )
+
+                            print(
+                                f"LOITERING | "
+                                f"Frame: "
+                                f"{frame_number + 1} | "
+                                f"Track ID: "
+                                f"{track_id} | "
+                                f"Duration: "
+                                f"{time_inside_seconds:.1f}s"
+                            )
+
+                    # -------------------------------------
                     # VISUAL ZONE DEBUG POINT
                     # -------------------------------------
 
-                    # Burada confirmed state değil,
-                    # ham geometry sonucu gösteriliyor.
+                    # Ham geometry sonucu gösteriliyor.
                     if inside_zone:
 
                         point_color = (
@@ -766,6 +791,27 @@ def main() -> None:
                         radius=6,
                         color=point_color,
                         thickness=-1,
+                    )
+
+                    # Motion direction etiketi.
+                    cv2.putText(
+                        annotated_frame,
+                        motion_direction,
+                        (
+                            zone_point[0]
+                            + 8,
+                            zone_point[1]
+                            - 8,
+                        ),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45,
+                        (
+                            255,
+                            255,
+                            255,
+                        ),
+                        1,
+                        cv2.LINE_AA,
                     )
 
                     # -------------------------------------
@@ -935,7 +981,7 @@ def main() -> None:
             )
 
             # ---------------------------------------------
-            # END-TO-END TIMING
+            # END-TO-END FRAME TIMING
             # ---------------------------------------------
 
             frame_end = (
@@ -1039,7 +1085,6 @@ def main() -> None:
     finally:
 
         video_capture.release()
-
         video_writer.release()
 
     # =========================================================
@@ -1054,8 +1099,7 @@ def main() -> None:
     if frame_number == 0:
 
         raise RuntimeError(
-            "Videodan hiçbir frame "
-            "işlenemedi."
+            "Videodan hiçbir frame işlenemedi."
         )
 
     overall_pipeline_fps = (
@@ -1090,18 +1134,9 @@ def main() -> None:
         average_end_to_end_latency = 0.0
 
     print()
-
-    print(
-        "=" * 60
-    )
-
-    print(
-        "TRACKING BENCHMARK"
-    )
-
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
+    print("TRACKING BENCHMARK")
+    print("=" * 60)
 
     print(
         f"İşlenen kare                 : "
@@ -1143,9 +1178,7 @@ def main() -> None:
         f"{average_end_to_end_latency:.2f} ms"
     )
 
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
 
     # =========================================================
     # 10. AUTOMATIC MP4 CONVERSION
@@ -1165,8 +1198,7 @@ def main() -> None:
         print()
 
         print(
-            "FFmpeg dönüşümü "
-            "başarısız oldu."
+            "FFmpeg dönüşümü başarısız oldu."
         )
 
         print(
@@ -1187,18 +1219,9 @@ def main() -> None:
         TEMP_VIDEO.unlink()
 
     print()
-
-    print(
-        "=" * 60
-    )
-
-    print(
-        "TÜM İŞLEMLER TAMAMLANDI"
-    )
-
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
+    print("TÜM İŞLEMLER TAMAMLANDI")
+    print("=" * 60)
 
     print(
         f"Final video : "
@@ -1210,9 +1233,7 @@ def main() -> None:
         f"{OUTPUT_VIDEO.stat().st_size / 1024**2:.2f} MB"
     )
 
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
 
 
 if __name__ == "__main__":
