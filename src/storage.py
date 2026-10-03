@@ -11,19 +11,15 @@ class EventStore:
         database_path: Path,
     ) -> None:
 
-        self.database_path = (
-            database_path
-        )
+        self.database_path = database_path
 
         self.database_path.parent.mkdir(
             parents=True,
             exist_ok=True,
         )
 
-        self.connection = (
-            sqlite3.connect(
-                self.database_path
-            )
+        self.connection = sqlite3.connect(
+            self.database_path
         )
 
         self._create_schema()
@@ -31,7 +27,7 @@ class EventStore:
     def _create_schema(
         self,
     ) -> None:
-        """Create the event table if it does not already exist."""
+        """Create the event table and apply lightweight schema migrations."""
 
         self.connection.execute(
             """
@@ -46,10 +42,36 @@ class EventStore:
                 confidence REAL NOT NULL,
                 event_type TEXT NOT NULL,
                 zone_name TEXT NOT NULL,
-                duration_seconds REAL
+                duration_seconds REAL,
+                review_status TEXT NOT NULL DEFAULT 'review',
+                reviewed_at TEXT
             )
             """
         )
+
+        # Existing Sprint 5 databases do not yet have review columns.
+        existing_columns = {
+            row[1]
+            for row in self.connection.execute(
+                "PRAGMA table_info(events)"
+            )
+        }
+
+        if "review_status" not in existing_columns:
+            self.connection.execute(
+                """
+                ALTER TABLE events
+                ADD COLUMN review_status TEXT NOT NULL DEFAULT 'review'
+                """
+            )
+
+        if "reviewed_at" not in existing_columns:
+            self.connection.execute(
+                """
+                ALTER TABLE events
+                ADD COLUMN reviewed_at TEXT
+                """
+            )
 
         self.connection.commit()
 
@@ -68,11 +90,9 @@ class EventStore:
     ) -> int:
         """Insert one event and return its generated database ID."""
 
-        created_at = (
-            datetime.now(
-                timezone.utc
-            ).isoformat()
-        )
+        created_at = datetime.now(
+            timezone.utc
+        ).isoformat()
 
         cursor = self.connection.execute(
             """
@@ -109,7 +129,49 @@ class EventStore:
         return int(
             cursor.lastrowid
         )
+    def update_review_status(
+        self,
+        event_id: int,
+        review_status: str,
+    ) -> bool:
+        """Update the human review status of an existing event."""
 
+        valid_statuses = {
+            "review",
+            "normal",
+            "confirmed",
+        }
+
+        if review_status not in valid_statuses:
+            raise ValueError(
+                f"Invalid review status: {review_status}"
+            )
+
+        reviewed_at = None
+
+        if review_status != "review":
+            reviewed_at = datetime.now(
+                timezone.utc
+            ).isoformat()
+
+        cursor = self.connection.execute(
+            """
+            UPDATE events
+            SET
+                review_status = ?,
+                reviewed_at = ?
+            WHERE event_id = ?
+            """,
+            (
+                review_status,
+                reviewed_at,
+                event_id,
+            ),
+        )
+
+        self.connection.commit()
+
+        return cursor.rowcount > 0
     def close(
         self,
     ) -> None:
