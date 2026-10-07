@@ -249,13 +249,27 @@ Users intending to reuse or deploy this project should review the applicable Ult
 
 ### 1. Create and activate a virtual environment
 
-```powershell
+Create the environment:
+
+```bash
 python -m venv .venv
+```
+
+Activate it on your operating system:
+
+**Windows PowerShell**
+
+```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-### 2. Install dependencies
+**Linux / macOS**
 
+```bash
+source .venv/bin/activate
+```
+
+### 2. Install dependencies
 For normal project use:
 
 ```powershell
