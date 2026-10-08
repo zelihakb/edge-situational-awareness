@@ -1,0 +1,110 @@
+[
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 14,
+    "track_id": 1
+  },
+  {
+    "event_type": "ZONE_ENTRY",
+    "frame_number": 31,
+    "track_id": 2
+  },
+  {
+    "event_type": "ZONE_ENTRY",
+    "frame_number": 61,
+    "track_id": 7
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 65,
+    "track_id": 3
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 73,
+    "track_id": 6,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 73,
+    "track_id": 4,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 90,
+    "track_id": 35,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 91,
+    "track_id": 4
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 103,
+    "track_id": 2,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 121,
+    "track_id": 35
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 123,
+    "track_id": 49,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "ZONE_ENTRY",
+    "frame_number": 123,
+    "track_id": 8
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 133,
+    "track_id": 7,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 135,
+    "track_id": 2
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 145,
+    "track_id": 49
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 157,
+    "track_id": 62,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "ZONE_ENTRY",
+    "frame_number": 172,
+    "track_id": 4
+  },
+  {
+    "event_type": "LOITERING",
+    "frame_number": 195,
+    "track_id": 8,
+    "duration_seconds": 3.0
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 210,
+    "track_id": 111
+  },
+  {
+    "event_type": "ZONE_EXIT",
+    "frame_number": 218,
+    "track_id": 7
+  }
+]
