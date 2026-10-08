@@ -40,6 +40,14 @@ EVENT_DB_PATH = (
     / "events.db"
 )
 
+REPLAY_CAPTURE_ENABLED = False
+REPLAY_CAPTURE_PATH = (
+    PROJECT_ROOT
+    / "data"
+    / "output"
+    / "track_replay.jsonl"
+)
+
 
 # =========================================================
 # MODEL SETTINGS

@@ -1,3 +1,4 @@
+import json
 import subprocess
 import time
 
@@ -22,6 +23,8 @@ from config import (
     TRAIL_LENGTH,
     WARMUP_RUNS,
     ZONE_CONFIRM_FRAMES,
+    REPLAY_CAPTURE_ENABLED,
+    REPLAY_CAPTURE_PATH,
 )
 from events import TrackEventEngine
 from metrics import PipelineMetrics
@@ -333,7 +336,34 @@ def main() -> None:
     )
     event_store = EventStore(
     EVENT_DB_PATH
-)
+    )
+    replay_file = None
+
+    if REPLAY_CAPTURE_ENABLED:
+     REPLAY_CAPTURE_PATH.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    replay_file = REPLAY_CAPTURE_PATH.open(
+        "w",
+        encoding="utf-8",
+    )
+
+    metadata = {
+        "record_type": "metadata",
+        "source_fps": source_fps,
+        "zone_center": zone_center.tolist(),
+        "zone_confirm_frames": ZONE_CONFIRM_FRAMES,
+        "loitering_threshold_seconds": LOITERING_THRESHOLD_SECONDS,
+        "motion_history_length": MOTION_HISTORY_LENGTH,
+        "motion_min_delta": motion_min_delta,
+    }
+
+    replay_file.write(
+        json.dumps(metadata)
+        + "\n"
+    )
 
     # -----------------------------------------------------
     # FRAME LOOP
@@ -492,7 +522,33 @@ def main() -> None:
                             zone_polygon,
                         )
                     )
+                    if replay_file is not None:
+                        replay_record = {
+                            "record_type": "track",
+                            "frame_number": metrics.frame_count,
+                            "track_id": track_id,
+                            "bbox": [
+                                float(value)
+                                for value in bbox
+                            ],
+                            "zone_point": [
+                                zone_point[0],
+                                zone_point[1],
+                            ],
+                            "inside_zone": inside_zone,
+                            "class_id": class_id,
+                            "class_name": str(
+                                model.names[class_id]
+                            ),
+                            "confidence": float(
+                                confidence
+                            ),
+                        }
 
+                        replay_file.write(
+                            json.dumps(replay_record)
+                            + "\n"
+                        )
                     (
                         motion_direction,
                         events,
@@ -663,10 +719,12 @@ def main() -> None:
                     )
 
     finally:
-
         video_capture.release()
         video_writer.release()
         event_store.close()
+
+        if replay_file is not None:
+            replay_file.close()
     # -----------------------------------------------------
     # BENCHMARK
     # -----------------------------------------------------

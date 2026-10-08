@@ -270,6 +270,7 @@ source .venv/bin/activate
 ```
 
 ### 2. Install dependencies
+
 For normal project use:
 
 ```powershell
@@ -403,7 +404,7 @@ Current tests cover:
 Current test suite:
 
 ```text
-22 tests passed
+23 tests passed
 ```
 
 Core logic coverage for the currently tested modules:
@@ -419,6 +420,10 @@ Combined core coverage: 97%
 The lower coverage in `zone.py` is primarily caused by OpenCV rendering operations, while deterministic geometry behavior is covered.
 
 Repository-wide source coverage is currently lower because UI, video I/O, orchestration, and visualization modules are not yet covered by unit tests. Coverage is therefore reported separately for the deterministic core logic.
+
+A golden replay integration test also replays 5,190 recorded observations from a real YOLO + ByteTrack run through the event engine and compares the resulting 20 events against a frozen expected-event fixture. This provides deterministic regression coverage for the tracker-to-event boundary without requiring the model, GPU, or source video in CI.
+
+The replay fixture is a regression baseline rather than ground-truth accuracy evaluation.
 
 Run the tests with:
 
