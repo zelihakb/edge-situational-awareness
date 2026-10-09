@@ -257,7 +257,14 @@ def test_legacy_database_is_migrated_without_losing_events(tmp_path):
         FROM events
         """
     ).fetchone()
+    columns = {
+        row[1]
+        for row in store.connection.execute(
+            "PRAGMA table_info(events)"
+        )
+    }
 
+    assert "evidence_path" in columns
     store.close()
 
     assert "review_status" in columns
@@ -269,3 +276,39 @@ def test_legacy_database_is_migrated_without_losing_events(tmp_path):
         "review",
         None,
     )
+def test_event_evidence_path_is_persisted(tmp_path):
+    database_path = tmp_path / "events.db"
+    store = EventStore(database_path)
+
+    evidence_path = (
+        "data/output/evidence/"
+        "frame_000031_track_2_zone_entry.jpg"
+    )
+
+    try:
+        event_id = store.log_event(
+            video_time_seconds=1.25,
+            frame_number=31,
+            track_id=2,
+            class_id=0,
+            class_name="person",
+            confidence=0.88,
+            event_type="ZONE_ENTRY",
+            zone_name="CONTROLLED_ZONE",
+            evidence_path=evidence_path,
+        )
+
+        saved_record = store.connection.execute(
+            """
+            SELECT evidence_path
+            FROM events
+            WHERE event_id = ?
+            """,
+            (event_id,),
+        ).fetchone()
+
+        assert saved_record is not None
+        assert saved_record[0] == evidence_path
+
+    finally:
+        store.close()    
