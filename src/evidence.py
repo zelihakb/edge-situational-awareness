@@ -28,15 +28,19 @@ def save_event_snapshot(
 
     snapshot_path = output_dir / filename
 
-    success = cv2.imwrite(
-        str(snapshot_path),
+    success, encoded_image = cv2.imencode(
+        ".jpg",
         frame,
     )
 
     if not success:
         raise RuntimeError(
-            f"Could not save event snapshot: "
+            f"Could not encode event snapshot: "
             f"{snapshot_path}"
         )
+
+    snapshot_path.write_bytes(
+        encoded_image.tobytes()
+    )
 
     return snapshot_path

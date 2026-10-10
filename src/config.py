@@ -39,7 +39,12 @@ EVENT_DB_PATH = (
     / "output"
     / "events.db"
 )
-
+EVIDENCE_DIR = (
+    PROJECT_ROOT
+    / "data"
+    / "output"
+    / "evidence"
+)
 REPLAY_CAPTURE_ENABLED = False
 REPLAY_CAPTURE_PATH = (
     PROJECT_ROOT

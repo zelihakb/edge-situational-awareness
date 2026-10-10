@@ -1,7 +1,7 @@
 import json
 import subprocess
 import time
-
+from uuid import uuid4
 import numpy as np
 import torch
 from ultralytics import YOLO
@@ -25,7 +25,10 @@ from config import (
     ZONE_CONFIRM_FRAMES,
     REPLAY_CAPTURE_ENABLED,
     REPLAY_CAPTURE_PATH,
+    EVIDENCE_DIR,
+    PROJECT_ROOT,
 )
+from evidence import save_event_snapshot
 from events import TrackEventEngine
 from metrics import PipelineMetrics
 from storage import EventStore
@@ -337,6 +340,9 @@ def main() -> None:
     event_store = EventStore(
     EVENT_DB_PATH
     )
+    evidence_run_dir = (
+        EVIDENCE_DIR / f"run_{uuid4().hex}"
+    )
     replay_file = None
 
     if REPLAY_CAPTURE_ENABLED:
@@ -566,7 +572,17 @@ def main() -> None:
                         print_event(
                             event
                         )
+                        snapshot_path = save_event_snapshot(
+                            frame=annotated_frame,
+                            output_dir=evidence_run_dir,
+                            event=event,
+                        )
 
+                        evidence_path = (
+                            snapshot_path
+                            .relative_to(PROJECT_ROOT)
+                            .as_posix()
+                        )
                         class_name = str(
                             model.names[
                                 class_id
@@ -619,6 +635,7 @@ def main() -> None:
                                     "duration_seconds"
                                 )
                             ),
+                            evidence_path=evidence_path,
                         )
 
                         print(
