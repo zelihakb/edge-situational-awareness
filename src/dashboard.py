@@ -7,6 +7,7 @@ import streamlit as st
 from config import (
     EVENT_DB_PATH,
     OUTPUT_VIDEO,
+    PROJECT_ROOT,
 )
 from storage import EventStore
 
@@ -16,7 +17,7 @@ from storage import EventStore
 # =========================================================
 
 st.set_page_config(
-    page_title="Edge Video Analytics",
+    page_title=("GPU-Accelerated Video Analytics & Event Detection"),
     page_icon="📹",
     layout="wide",
 )
@@ -53,7 +54,8 @@ def load_events() -> pd.DataFrame:
                 zone_name,
                 duration_seconds,
                 review_status,
-                reviewed_at
+                reviewed_at,
+                evidence_path
             FROM events
             ORDER BY event_id DESC
             """,
@@ -91,7 +93,7 @@ def update_event_status(
 # =========================================================
 
 st.title(
-    "Real-Time Edge Video Analytics"
+    "GPU-Accelerated Video Analytics & Event Detection"
 )
 
 st.caption(
@@ -461,7 +463,46 @@ st.download_button(
     file_name="filtered_events.csv",
     mime="text/csv",
 )
+# =========================================================
+# EVENT EVIDENCE VIEWER
+# =========================================================
 
+st.subheader("Event Evidence Viewer")
+
+if table_df.empty:
+    st.info("No events match the current filters.")
+
+else:
+    selected_event_id = st.selectbox(
+        "Select an Event",
+        options=table_df["Event ID"].tolist(),
+        format_func=lambda event_id: f"Event #{event_id}",
+    )
+
+    selected_event = events_df.loc[
+        events_df["event_id"] == selected_event_id
+    ].iloc[0]
+
+    evidence_path = selected_event["evidence_path"]
+
+    if pd.isna(evidence_path) or not str(evidence_path).strip():
+        st.info("No visual evidence is available for this event.")
+
+    else:
+        snapshot_path = PROJECT_ROOT / evidence_path
+
+        if snapshot_path.is_file():
+            st.image(
+                str(snapshot_path),
+                caption=(
+                    f"Event #{selected_event_id} — "
+                    f"{selected_event['event_type']}"
+                ),
+                use_container_width=True,
+            )
+
+        else:
+            st.warning("The evidence image could not be found.")
 st.divider()
 
 

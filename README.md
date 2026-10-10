@@ -22,8 +22,11 @@ The system focuses on **observable behavior rather than identity or automated in
 - Loitering detection based on video time
 - Experimental image-space approaching / moving-away estimation
 - SQLite event persistence
+- Event-frame JPEG snapshot capture
+- Event evidence path persistence in SQLite
 - Human-in-the-loop review workflow
 - Streamlit monitoring dashboard
+- Event evidence viewer for human review
 - Event filtering and CSV export
 - Event timeline and review analytics
 - Processed video preview
@@ -47,17 +50,21 @@ flowchart LR
     F --> G[Zone Entry / Exit]
     F --> H[Loitering]
 
-    G --> I[(SQLite Event Store)]
+    G --> I[Event Snapshot Capture]
     H --> I
 
-    I --> J[Human Review]
-    I --> K[Streamlit Dashboard]
+    I --> J[JPEG Evidence Files]
+    I -->|Relative Evidence Path| K[(SQLite Event Store)]
 
-    J --> K
+    J --> L[Streamlit Dashboard]
+    K --> L
 
-    E --> L[Annotated Video]
-    C --> M[Performance Metrics]
-    M --> L
+    L --> M[Human Review]
+    M --> K
+
+    E --> N[Annotated Video]
+    C --> O[Performance Metrics]
+    O --> N
 ```
 
 ---
@@ -83,7 +90,12 @@ BYTETRACK MULTI-OBJECT TRACKING
           ↓
       ENTRY / EXIT / LOITERING
           ↓
-      SQLITE EVENT STORAGE
+  EVENT SNAPSHOT CAPTURE
+          ↓
+    JPEG EVIDENCE FILE
+          ↓
+    SQLITE EVENT STORAGE
+    (WITH EVIDENCE PATH)
           ↓
       HUMAN-IN-THE-LOOP REVIEW
           ↓
@@ -166,6 +178,8 @@ The Streamlit dashboard provides:
 - event timeline
 - CSV export
 - processed video preview
+- event-specific JPEG evidence viewer
+- graceful handling of missing or legacy evidence
 
 Run the dashboard with:
 
@@ -188,9 +202,11 @@ edge-situational-awareness/
 │   ├── config.py
 │   ├── dashboard.py
 │   ├── detect_image.py
+│   ├── evidence.py
 │   ├── events.py
 │   ├── metrics.py
 │   ├── review_event.py
+│   ├── replay_events.py
 │   ├── storage.py
 │   ├── track_video.py
 │   ├── video_io.py
@@ -201,7 +217,14 @@ edge-situational-awareness/
 │   ├── test_events.py
 │   ├── test_storage.py
 │   └── test_zone.py
-│
+│   ├── test_evidence.py
+│   └── test_replay.py
+│   └── fixtures/
+│       ├── sample_tracks.jsonl
+│       └── expected_events.json
+│── .github/
+│   └── workflows/
+│       └── tests.yml
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
@@ -304,6 +327,7 @@ The pipeline generates:
 ```text
 data/output/tracked_video.mp4
 data/output/events.db
+data/output/evidence/run_<uuid>/*.jpg
 ```
 
 ### 5. Start the dashboard
@@ -336,6 +360,7 @@ Events are stored in SQLite with fields including:
 - loitering duration
 - human review status
 - review timestamp
+- relative evidence image path
 
 Example:
 
@@ -352,6 +377,10 @@ Review status: normal
 ```
 
 The stored confidence value represents the detector confidence for the tracked object on the event frame. It is not an event-confidence score.
+
+Event snapshots are stored as JPEG files in run-specific directories. SQLite stores the relative evidence path rather than the image itself.
+
+Each processing run uses a unique directory to avoid overwriting snapshots from previous runs. Legacy event records remain accessible and may have a NULL evidence_path value.
 
 ---
 
@@ -400,14 +429,19 @@ Current tests cover:
 - human review state transitions
 - invalid review states
 - lightweight database schema migration
+- event snapshot creation and JPEG validation
+- snapshot preservation across separate run directories
+- SQLite evidence-path persistence
+- snapshot-to-database path integration
+- legacy event migration with NULL evidence paths
 
 Current test suite:
 
 ```text
-23 tests passed
+27 tests passed
 ```
 
-Core logic coverage for the currently tested modules:
+Previously measured deterministic core coverage (SP9 baseline; not recalculated for the current test suite):
 
 ```text
 events.py   : 99%
@@ -507,6 +541,10 @@ Persistence is handled separately by the storage layer, keeping event logic easi
 - Repository-wide automated coverage does not yet include the complete UI, video I/O, and orchestration stack.
 - The project does not perform face recognition or identity inference.
 - Dedicated edge-hardware deployment has not yet been evaluated.
+- Event snapshots capture individual annotated frames and do not independently establish temporal event correctness.
+- The event-specific object is not yet visually highlighted separately from other detections.
+- Legacy events may not have associated evidence images.
+- Snapshot capture introduces additional disk I/O, but its isolated performance impact has not yet been benchmarked.
 
 ---
 
@@ -532,9 +570,6 @@ Development is currently focused on **verification and evaluation before additio
 
 ### Planned work
 
-- GitHub Actions CI for CPU-based automated tests
-- replay / golden integration tests using recorded tracking output
-- event-frame snapshots for human review
 - revised zone-relative motion-direction analysis and corresponding tests
 - configuration-based zone definitions
 - small ground-truth event evaluation
@@ -571,10 +606,15 @@ Experimental motion direction
 SQLite persistence
 Human review
 Interactive dashboard
+Event-frame JPEG snapshots
+SQLite evidence path persistence
+Dashboard evidence viewer
 Performance benchmarking
 Automated core-logic tests
+Golden replay regression testing
+GitHub Actions CI
 ```
 
-Current automated test suite: **22 passing tests**.
+Current automated test suite: **27 passing tests**.
 
 The current development phase is focused on testing, validation, evaluation, and failure analysis before adding further system complexity.

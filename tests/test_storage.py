@@ -1,7 +1,9 @@
 import sqlite3
 
+import numpy as np
 import pytest
 
+from src.evidence import save_event_snapshot
 from src.storage import EventStore
 
 
@@ -253,16 +255,11 @@ def test_legacy_database_is_migrated_without_losing_events(tmp_path):
             event_id,
             event_type,
             review_status,
-            reviewed_at
+            reviewed_at,
+            evidence_path
         FROM events
         """
     ).fetchone()
-    columns = {
-        row[1]
-        for row in store.connection.execute(
-            "PRAGMA table_info(events)"
-        )
-    }
 
     assert "evidence_path" in columns
     store.close()
@@ -274,6 +271,7 @@ def test_legacy_database_is_migrated_without_losing_events(tmp_path):
         1,
         "ZONE_ENTRY",
         "review",
+        None,
         None,
     )
 def test_event_evidence_path_is_persisted(tmp_path):
@@ -311,4 +309,77 @@ def test_event_evidence_path_is_persisted(tmp_path):
         assert saved_record[0] == evidence_path
 
     finally:
-        store.close()    
+        store.close()
+
+def test_saved_snapshot_is_linked_to_event(tmp_path):
+        event = {
+        "event_type": "ZONE_ENTRY",
+        "frame_number": 31,
+        "track_id": 2,
+    }
+
+        frame = np.zeros(
+            (100, 200, 3),
+            dtype=np.uint8,
+        )
+
+        snapshot_path = save_event_snapshot(
+            frame=frame,
+            output_dir=(
+                tmp_path
+                / "data"
+                / "output"
+                / "evidence"
+                / "run_test"
+            ),
+            event=event,
+        )
+
+        evidence_path = (
+            snapshot_path
+            .relative_to(tmp_path)
+            .as_posix()
+        )
+
+        store = EventStore(
+            tmp_path / "events.db"
+        )
+
+        try:
+            event_id = store.log_event(
+                video_time_seconds=1.25,
+                frame_number=event["frame_number"],
+                track_id=event["track_id"],
+                class_id=0,
+                class_name="person",
+                confidence=0.88,
+                event_type=event["event_type"],
+                zone_name="CONTROLLED_ZONE",
+                evidence_path=evidence_path,
+            )
+
+            row = store.connection.execute(
+                """
+                SELECT evidence_path
+                FROM events
+                WHERE event_id = ?
+                """,
+                (event_id,),
+                ).fetchone()
+
+            assert row is not None
+
+            saved_path = row[0]
+
+            assert saved_path == evidence_path
+
+            assert (
+                tmp_path / saved_path
+            ).is_file()
+
+            assert (
+                tmp_path / saved_path
+            ).resolve() == snapshot_path.resolve()
+
+        finally:
+            store.close()
