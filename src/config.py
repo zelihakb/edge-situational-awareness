@@ -11,7 +11,7 @@ INPUT_VIDEO = (
     PROJECT_ROOT
     / "data"
     / "input"
-    / "test_video.mp4"
+    / "intersection_v2.mp4"
 )
 
 TEMP_VIDEO = (
@@ -25,7 +25,7 @@ OUTPUT_VIDEO = (
     PROJECT_ROOT
     / "data"
     / "output"
-    / "tracked_video.mp4"
+    / "tracked_intersection_v2.mp4"
 )
 
 MODEL_PATH = (
@@ -37,7 +37,7 @@ EVENT_DB_PATH = (
     PROJECT_ROOT
     / "data"
     / "output"
-    / "events.db"
+    / "events_intersection_v2.db"
 )
 EVIDENCE_DIR = (
     PROJECT_ROOT
