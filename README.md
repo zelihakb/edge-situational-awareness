@@ -20,7 +20,9 @@ The system focuses on **observable behavior rather than identity or automated in
 - Bottom-center zone membership estimation
 - Debounced zone entry and exit detection
 - Loitering detection based on video time
-- Experimental image-space approaching / moving-away estimation
+- Zone-boundary-relative motion direction estimation
+- Inside-zone motion classification
+- Motion stability and boundary-direction regression tests
 - SQLite event persistence
 - Event-frame JPEG snapshot capture
 - Event evidence path persistence in SQLite
@@ -122,19 +124,30 @@ Generated when a confirmed track remains inside the zone longer than the configu
 
 Video timeline time is used instead of processing wall-clock time.
 
-### Motion Direction
 
-Recent image-space distance between the tracked object's bottom-center point and the controlled-zone center is currently used to estimate:
+### Motion Direction — Zone-Relative Analysis (SP13)
 
-- `APPROACHING`
-- `MOVING_AWAY`
-- `STABLE`
+Motion direction is estimated using recent bottom-center positions of tracked objects and their relationship to the controlled-zone polygon.
 
-This represents an image-space trend rather than physical distance in meters.
+The current implementation distinguishes four motion states:
 
-Motion direction is currently a visualization-oriented experimental signal and is **not persisted as a database event**.
+- `APPROACHING`: An object outside the zone moves closer to its boundary.
+- `MOVING_AWAY`: An object outside the zone moves farther from its boundary.
+- `MOVING_INSIDE`: An object inside the zone shows meaningful image-space displacement.
+- `STABLE`: The measured motion change remains below the configured threshold, or insufficient history is available.
 
-The current center-distance method is a known limitation and is planned to be revised using a more robust zone-relative motion measure.
+For objects outside the zone, the algorithm uses the signed Euclidean distance to the nearest polygon boundary, calculated with OpenCV's `pointPolygonTest`.
+
+For objects inside the zone, displacement between the oldest and newest positions in a bounded history window is used instead of distance to the zone center.
+
+This avoids interpreting movement through the zone center as movement away from the zone.
+
+The implementation uses a configurable history length and motion threshold to reduce sensitivity to small coordinate fluctuations.
+
+Motion states are experimental visualization signals, not persisted database events. Zone entry, exit, and loitering are evaluated separately.
+
+The measurements represent image-space geometry rather than physical distance or velocity. The system does not infer an object's intent.
+
 
 ---
 
@@ -219,6 +232,7 @@ edge-situational-awareness/
 │   └── test_zone.py
 │   ├── test_evidence.py
 │   └── test_replay.py
+│   ├── test_motion.py
 │   └── fixtures/
 │       ├── sample_tracks.jsonl
 │       └── expected_events.json
@@ -310,11 +324,14 @@ For GPU acceleration, install the appropriate CUDA-enabled PyTorch build for the
 
 ### 3. Add an input video
 
-Place the test video at:
+The current demonstration configuration expects:
 
 ```text
-data/input/test_video.mp4
+data/input/intersection_v2.mp4
 ```
+
+Input and generated video files are excluded from Git. Users must provide their own compatible video and update `INPUT_VIDEO` in `src/config.py` if necessary.
+
 
 ### 4. Run the analytics pipeline
 
@@ -324,11 +341,16 @@ python src\track_video.py
 
 The pipeline generates:
 
+The current configuration generates:
+
 ```text
-data/output/tracked_video.mp4
-data/output/events.db
+data/output/tracked_intersection_v2.mp4
+data/output/events_intersection_v2.db
 data/output/evidence/run_<uuid>/*.jpg
 ```
+
+Output paths are configurable in `src/config.py`.
+
 
 ### 5. Start the dashboard
 
@@ -389,25 +411,35 @@ Each processing run uses a unique directory to avoid overwriting snapshots from 
 The pipeline records:
 
 - YOLO inference latency
-- complete tracking-call latency
-- end-to-end frame latency
-- rolling FPS
-- overall pipeline FPS
+- Complete tracking-call latency
+- End-to-end frame latency
+- Rolling FPS
+- Overall pipeline FPS
 
-An example run using a 1280×720, 24 FPS test video on an RTX 3050 Ti Laptop GPU produced approximately:
+### SP13 Development Benchmark
+
+A single development run was performed using a 1280 × 720 recorded video at 24 source FPS on an NVIDIA GeForce RTX 3050 Ti Laptop GPU.
 
 ```text
-Overall pipeline FPS          : 17.60
-Average inference latency     : 13.49 ms
-Average track-call latency    : 20.86 ms
-Average end-to-end latency    : 51.48 ms
+Processed frames              : 240 / 240
+Overall pipeline FPS          : 15.78
+Average inference latency     : 13.62 ms
+Average track-call latency    : 21.19 ms
+Average end-to-end latency    : 57.56 ms
+Recorded events               : 18
 ```
+
+The pipeline successfully processed the complete 10-second video and generated an H.264 MP4 output.
+
+The 18 recorded events are pipeline outputs, not independently verified ground-truth detections.
+
+Throughput was below the video's 24 FPS source rate. Therefore, this result does not establish real-time processing at the source frame rate.
 
 Performance varies with GPU state, power mode, temperature, background processes, and workload.
 
-These values should therefore be treated as a **single-run development benchmark**, not as a universal or guaranteed real-time performance claim.
+These values represent a **single-run development benchmark**, not a universal or guaranteed real-time performance claim.
 
-Repeated benchmark runs with mean and standard deviation are planned.
+Repeated benchmark runs with mean and standard deviation, as well as formal event accuracy evaluation, remain future work.
 
 ---
 
@@ -434,11 +466,16 @@ Current tests cover:
 - SQLite evidence-path persistence
 - snapshot-to-database path integration
 - legacy event migration with NULL evidence paths
+- signed distance to polygon boundaries
+- stationary tracks and small tracking jitter
+- inside-zone motion across the zone center
+- zone-boundary-relative approaching and moving-away classification
+- cases where zone-center and boundary-based motion estimates disagree
 
 Current test suite:
 
 ```text
-27 tests passed
+34 tests passed
 ```
 
 Previously measured deterministic core coverage (SP9 baseline; not recalculated for the current test suite):
@@ -471,7 +508,10 @@ Run core coverage with:
 python -m pytest --cov=src.events --cov=src.storage --cov=src.zone --cov-report=term-missing
 ```
 
-Motion-direction behavior is deliberately excluded from the current unit-test scope because that algorithm is scheduled for revision.
+
+SP13 adds six motion-related test cases covering stationary behavior, positional jitter, inside-zone movement, boundary-relative approach and departure, and a center-versus-boundary disagreement scenario.
+
+The golden replay fixture remains a deterministic regression baseline rather than a ground-truth accuracy evaluation.
 
 ---
 
@@ -529,7 +569,11 @@ Persistence is handled separately by the storage layer, keeping event logic easi
 ## Limitations
 
 - Motion estimation currently operates in image space rather than calibrated world coordinates.
-- The current motion-direction method uses distance to the zone center and may become misleading when an object passes through the center.
+- Boundary-relative motion does not measure physical distance or real-world speed.
+- Movement parallel to the zone boundary may be classified as STABLE when signed boundary distance changes very little.
+- Inside-zone motion uses net displacement across a history window and may miss movement that returns near its starting position.
+- Motion labels may be affected by occlusion, tracking jitter, and camera perspective.
+- Motion classifications have not yet undergone formal ground-truth accuracy evaluation.
 - No homography, camera calibration, or physical distance estimation is currently applied.
 - The controlled zone is currently configuration-based and designed around a single demonstration region.
 - Tracking IDs may change under heavy occlusion or difficult scenes.
@@ -568,9 +612,15 @@ The system reports measurable visual events and leaves contextual interpretation
 
 Development is currently focused on **verification and evaluation before additional feature expansion**.
 
+### Completed — SP13
+
+- Zone-boundary-relative motion analysis
+- Inside-zone motion classification
+- Motion regression tests
+- Video pipeline integration and visual validation
+
 ### Planned work
 
-- revised zone-relative motion-direction analysis and corresponding tests
 - configuration-based zone definitions
 - small ground-truth event evaluation
 - precision / recall and timing-error analysis
@@ -602,7 +652,7 @@ Trajectory analysis
 Controlled-zone monitoring
 Entry / exit events
 Loitering
-Experimental motion direction
+Zone-relative motion direction (SP13, experimental)
 SQLite persistence
 Human review
 Interactive dashboard

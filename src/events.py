@@ -1,5 +1,8 @@
 from collections import defaultdict, deque
-from src.zone import get_signed_zone_distance
+if __package__:
+    from .zone import get_signed_zone_distance
+else:
+    from zone import get_signed_zone_distance
 import numpy as np
 
 

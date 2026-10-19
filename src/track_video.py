@@ -312,6 +312,7 @@ def main() -> None:
         TrackEventEngine(
             source_fps=source_fps,
             zone_center=zone_center,
+            zone_polygon=zone_polygon,
             motion_min_delta=(
                 motion_min_delta
             ),
@@ -346,30 +347,29 @@ def main() -> None:
     replay_file = None
 
     if REPLAY_CAPTURE_ENABLED:
-     REPLAY_CAPTURE_PATH.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+        REPLAY_CAPTURE_PATH.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
-    replay_file = REPLAY_CAPTURE_PATH.open(
-        "w",
-        encoding="utf-8",
-    )
+        replay_file = REPLAY_CAPTURE_PATH.open(
+            "w",
+            encoding="utf-8",
+        )
 
-    metadata = {
-        "record_type": "metadata",
-        "source_fps": source_fps,
-        "zone_center": zone_center.tolist(),
-        "zone_confirm_frames": ZONE_CONFIRM_FRAMES,
-        "loitering_threshold_seconds": LOITERING_THRESHOLD_SECONDS,
-        "motion_history_length": MOTION_HISTORY_LENGTH,
-        "motion_min_delta": motion_min_delta,
-    }
+        metadata = {
+            "record_type": "metadata",
+            "source_fps": source_fps,
+            "zone_center": zone_center.tolist(),
+            "zone_confirm_frames": ZONE_CONFIRM_FRAMES,
+            "loitering_threshold_seconds": LOITERING_THRESHOLD_SECONDS,
+            "motion_history_length": MOTION_HISTORY_LENGTH,
+            "motion_min_delta": motion_min_delta,
+        }
 
-    replay_file.write(
-        json.dumps(metadata)
-        + "\n"
-    )
+        replay_file.write(
+            json.dumps(metadata) + "\n"
+        )
 
     # -----------------------------------------------------
     # FRAME LOOP
