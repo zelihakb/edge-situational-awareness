@@ -1,5 +1,5 @@
 from collections import defaultdict, deque
-
+from src.zone import get_signed_zone_distance
 import numpy as np
 
 
@@ -14,9 +14,11 @@ class TrackEventEngine:
         zone_confirm_frames: int,
         loitering_threshold_seconds: float,
         motion_history_length: int,
+        zone_polygon: np.ndarray | None = None,
     ) -> None:
         self.source_fps = source_fps
         self.zone_center = zone_center
+        self.zone_polygon = zone_polygon
         self.motion_min_delta = motion_min_delta
         self.zone_confirm_frames = zone_confirm_frames
         self.loitering_threshold_seconds = loitering_threshold_seconds
@@ -97,15 +99,21 @@ class TrackEventEngine:
 
         position_history.append(zone_point)
 
-        current_distance = float(
-            np.linalg.norm(
-                np.asarray(
-                    zone_point,
-                    dtype=np.float32,
-                )
-                - self.zone_center
+        if self.zone_polygon is not None:
+            current_distance = get_signed_zone_distance(
+                zone_point,
+                self.zone_polygon,
             )
-        )
+        else:
+            current_distance = float(
+                np.linalg.norm(
+                    np.asarray(
+                        zone_point,
+                        dtype=np.float32,
+                    )
+                    - self.zone_center
+                )
+            )
 
         distance_history = self.motion_distance_history[
             track_id
@@ -136,6 +144,13 @@ class TrackEventEngine:
 
         if abs(distance_change) < self.motion_min_delta:
             return "STABLE"
+
+        if self.zone_polygon is not None:
+            return (
+                "APPROACHING"
+                if distance_change > 0
+                else "MOVING_AWAY"
+            )
 
         return (
             "APPROACHING"
