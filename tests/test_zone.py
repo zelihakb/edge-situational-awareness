@@ -4,6 +4,7 @@ from src.zone import (
     get_zone_center,
     get_zone_polygon,
     is_point_inside_zone,
+    get_signed_zone_distance,
 )
 
 
@@ -81,3 +82,26 @@ def test_point_on_zone_boundary_counts_as_inside():
     )
 
     assert is_point_inside_zone((5, 0), polygon) is True
+
+def test_signed_zone_distance():
+    polygon = np.array(
+        [
+            [0, 0],
+            [10, 0],
+            [10, 10],
+            [0, 10],
+        ],
+        dtype=np.int32,
+    )
+
+    assert get_signed_zone_distance(
+        (5, 5), polygon
+    ) == 5.0
+
+    assert get_signed_zone_distance(
+        (15, 5), polygon
+    ) == -5.0
+
+    assert get_signed_zone_distance(
+        (0, 5), polygon
+    ) == 0.0

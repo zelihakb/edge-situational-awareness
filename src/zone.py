@@ -40,6 +40,19 @@ def is_point_inside_zone(
         False,
     ) >= 0
 
+def get_signed_zone_distance(
+    point: tuple[int, int],
+    polygon: np.ndarray,
+) -> float:
+    """Return signed pixel distance to the nearest zone boundary."""
+
+    return float(
+        cv2.pointPolygonTest(
+            polygon,
+            point,
+            True,
+        )
+    )
 
 def draw_zone(
     frame: np.ndarray,

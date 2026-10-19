@@ -39,7 +39,14 @@ class TrackEventEngine:
                 maxlen=self.motion_history_length
             )
         )
-
+                # Store recent positions for image-space motion analysis.
+        self.motion_position_history: dict[
+            int, deque[tuple[int, int]]
+        ] = defaultdict(
+            lambda: deque(
+                maxlen=self.motion_history_length
+            )
+        )
         self.zone_entry_count = 0
         self.zone_exit_count = 0
 
@@ -58,6 +65,7 @@ class TrackEventEngine:
         motion_direction = self._update_motion(
             track_id,
             zone_point,
+            inside_zone,
         )
 
         self._update_zone_state(
@@ -79,8 +87,15 @@ class TrackEventEngine:
         self,
         track_id: int,
         zone_point: tuple[int, int],
+        inside_zone: bool,
     ) -> str:
-        """Estimate image-space motion relative to the zone center."""
+        """Estimate image-space motion using position and distance history."""
+
+        position_history = self.motion_position_history[
+            track_id
+        ]
+
+        position_history.append(zone_point)
 
         current_distance = float(
             np.linalg.norm(
@@ -92,20 +107,31 @@ class TrackEventEngine:
             )
         )
 
-        history = self.motion_distance_history[
+        distance_history = self.motion_distance_history[
             track_id
         ]
 
-        history.append(
-            current_distance
-        )
+        distance_history.append(current_distance)
 
-        if len(history) < self.motion_history_length:
+        if len(position_history) < self.motion_history_length:
             return "STABLE"
 
+        if inside_zone:
+            movement = float(
+                np.linalg.norm(
+                    np.asarray(position_history[-1], dtype=np.float32)
+                    - np.asarray(position_history[0], dtype=np.float32)
+                )
+            )
+
+            if movement < self.motion_min_delta:
+                return "STABLE"
+
+            return "MOVING_INSIDE"
+
         distance_change = (
-            history[-1]
-            - history[0]
+            distance_history[-1]
+            - distance_history[0]
         )
 
         if abs(distance_change) < self.motion_min_delta:

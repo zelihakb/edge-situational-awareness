@@ -50,3 +50,29 @@ def test_small_position_jitter_remains_stable():
 
         assert motion_direction == "STABLE"
         assert events == []
+
+def test_crossing_zone_center_reports_inside_motion():
+    engine = TrackEventEngine(
+        source_fps=24.0,
+        zone_center=np.array([150.0, 100.0]),
+        motion_min_delta=2.0,
+        zone_confirm_frames=3,
+        loitering_threshold_seconds=3.0,
+        motion_history_length=8,
+    )
+
+    positions = [
+        145, 150, 155, 160,
+        165, 170, 175, 180,
+    ]
+
+    for frame_number, x_position in enumerate(positions):
+        motion_direction, events = engine.update(
+            track_id=1,
+            zone_point=(x_position, 100),
+            inside_zone=True,
+            frame_number=frame_number,
+        )
+
+    assert motion_direction == "MOVING_INSIDE"
+    assert events == []
