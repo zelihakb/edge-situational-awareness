@@ -1,10 +1,13 @@
 import numpy as np
+import pytest
 
 from src.zone import (
     get_zone_center,
     get_zone_polygon,
     is_point_inside_zone,
     get_signed_zone_distance,
+    load_zone_config,
+    save_zone_config,
 )
 
 
@@ -105,3 +108,53 @@ def test_signed_zone_distance():
     assert get_signed_zone_distance(
         (0, 5), polygon
     ) == 0.0
+
+def test_zone_config_roundtrip(tmp_path):
+    points = [
+        (0.1, 0.2),
+        (0.8, 0.2),
+        (0.8, 0.8),
+        (0.1, 0.8),
+    ]
+
+    config_path = tmp_path / "zone.json"
+
+    save_zone_config(config_path, points)
+    loaded_points = load_zone_config(config_path)
+
+    assert loaded_points == points
+
+    polygon = get_zone_polygon(
+        200,
+        100,
+        loaded_points,
+    )
+
+    expected = np.array(
+        [
+            [20, 20],
+            [160, 20],
+            [160, 80],
+            [20, 80],
+        ],
+        dtype=np.int32,
+    )
+
+    assert np.array_equal(polygon, expected)
+
+
+@pytest.mark.parametrize(
+    "points",
+    [
+        [(0.1, 0.1), (0.2, 0.2)],
+        [(0.1, 0.1), (1.2, 0.2), (0.8, 0.8)],
+        [(0.1, 0.1), (0.2, 0.2), (0.3, 0.3)],
+    ],
+)
+def test_invalid_zone_config_is_rejected(tmp_path, points):
+    config_path = tmp_path / "invalid_zone.json"
+
+    with pytest.raises(ValueError):
+        save_zone_config(config_path, points)
+
+    assert not config_path.exists()
