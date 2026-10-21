@@ -158,3 +158,36 @@ def test_invalid_zone_config_is_rejected(tmp_path, points):
         save_zone_config(config_path, points)
 
     assert not config_path.exists()
+
+def test_self_intersecting_polygon_is_rejected(tmp_path):
+    # We use a crossing polygon with non-zero area.
+    points = [
+        (0.1, 0.1),
+        (0.9, 0.7),
+        (0.1, 0.9),
+        (0.8, 0.1),
+    ]
+
+    config_path = tmp_path / "crossed_zone.json"
+
+    with pytest.raises(ValueError, match="intersect"):
+        save_zone_config(config_path, points)
+
+    assert not config_path.exists()
+
+
+def test_concave_polygon_is_accepted(tmp_path):
+    # We allow concave polygons as long as edges do not cross.
+    points = [
+        (0.1, 0.1),
+        (0.9, 0.1),
+        (0.9, 0.9),
+        (0.5, 0.5),
+        (0.1, 0.9),
+    ]
+
+    config_path = tmp_path / "concave_zone.json"
+
+    save_zone_config(config_path, points)
+
+    assert load_zone_config(config_path) == points

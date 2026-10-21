@@ -93,6 +93,45 @@ def draw_zone(
         2,
         cv2.LINE_AA,
     )
+
+def _segments_intersect(a, b, c, d) -> bool:
+    """Check whether two line segments intersect or touch."""
+
+    epsilon = 1e-10
+
+    def cross(p, q, r):
+        return (
+            (q[0] - p[0]) * (r[1] - p[1])
+            - (q[1] - p[1]) * (r[0] - p[0])
+        )
+
+    def on_segment(p, q, r):
+        return (
+            min(p[0], r[0]) - epsilon <= q[0] <= max(p[0], r[0]) + epsilon
+            and min(p[1], r[1]) - epsilon <= q[1] <= max(p[1], r[1]) + epsilon
+        )
+
+    o1 = cross(a, b, c)
+    o2 = cross(a, b, d)
+    o3 = cross(c, d, a)
+    o4 = cross(c, d, b)
+
+    def opposite(x, y):
+        return (
+            (x > epsilon and y < -epsilon)
+            or (x < -epsilon and y > epsilon)
+        )
+
+    if opposite(o1, o2) and opposite(o3, o4):
+        return True
+
+    return (
+        (abs(o1) <= epsilon and on_segment(a, c, b))
+        or (abs(o2) <= epsilon and on_segment(a, d, b))
+        or (abs(o3) <= epsilon and on_segment(c, a, d))
+        or (abs(o4) <= epsilon and on_segment(c, b, d))
+    )
+
 def validate_normalized_points(
     points: object,
 ) -> list[tuple[float, float]]:
@@ -122,14 +161,32 @@ def validate_normalized_points(
 
     polygon = np.array(normalized, dtype=np.float32)
 
-    if (
-        len(set(normalized)) != len(normalized)
-        or cv2.contourArea(polygon) <= 1e-6
-    ):
-        raise ValueError("Polygon must have distinct, non-collinear points.")
+    if len(set(normalized)) != len(normalized):
+        raise ValueError("Polygon points must be distinct.")
+
+    point_count = len(normalized)
+
+    # We check whether non-adjacent edges intersect.
+    for i in range(point_count):
+        a = normalized[i]
+        b = normalized[(i + 1) % point_count]
+
+        for j in range(i + 1, point_count):
+            if j == i + 1 or (i == 0 and j == point_count - 1):
+                continue
+
+            c = normalized[j]
+            d = normalized[(j + 1) % point_count]
+
+            if _segments_intersect(a, b, c, d):
+                raise ValueError(
+                    "Polygon edges must not intersect."
+                )
+
+    if cv2.contourArea(polygon) <= 1e-6:
+        raise ValueError("Polygon must have a non-zero area.")
 
     return normalized
-
 
 def load_zone_config(
     path: Path,
