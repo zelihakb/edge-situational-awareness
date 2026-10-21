@@ -27,6 +27,7 @@ from config import (
     REPLAY_CAPTURE_PATH,
     EVIDENCE_DIR,
     PROJECT_ROOT,
+    ZONE_CONFIG_PATH,
 )
 from evidence import save_event_snapshot
 from events import TrackEventEngine
@@ -48,6 +49,7 @@ from zone import (
     get_zone_center,
     get_zone_polygon,
     is_point_inside_zone,
+    load_zone_config,
 )
 
 
@@ -222,7 +224,14 @@ def main() -> None:
             f"YOLO model not found: "
             f"{MODEL_PATH}"
         )
+    # Load our saved zone before starting video processing.
+    normalized_points = load_zone_config(
+        ZONE_CONFIG_PATH
+    )
 
+    print(
+        f"Zone configuration loaded: {ZONE_CONFIG_PATH}"
+    )
     OUTPUT_VIDEO.parent.mkdir(
         parents=True,
         exist_ok=True,
@@ -258,6 +267,7 @@ def main() -> None:
     zone_polygon = get_zone_polygon(
         frame_width,
         frame_height,
+        normalized_points,
     )
 
     zone_center = get_zone_center(

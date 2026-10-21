@@ -6,7 +6,7 @@ from pathlib import Path
 # =========================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
+ZONE_CONFIG_PATH = PROJECT_ROOT / "configs" / "zone.json"
 INPUT_VIDEO = (
     PROJECT_ROOT
     / "data"
