@@ -17,6 +17,9 @@ The system focuses on **observable behavior rather than identity or automated in
 - People and vehicle detection
 - Track trajectory visualization
 - Resolution-independent controlled zone
+- JSON-based controlled-zone configuration
+- Interactive polygon editor with mouse-based vertex selection
+- Polygon validation for invalid and self-intersecting shapes
 - Bottom-center zone membership estimation
 - Debounced zone entry and exit detection
 - Loitering detection based on video time
@@ -124,7 +127,6 @@ Generated when a confirmed track remains inside the zone longer than the configu
 
 Video timeline time is used instead of processing wall-clock time.
 
-
 ### Motion Direction — Zone-Relative Analysis (SP13)
 
 Motion direction is estimated using recent bottom-center positions of tracked objects and their relationship to the controlled-zone polygon.
@@ -147,7 +149,6 @@ The implementation uses a configurable history length and motion threshold to re
 Motion states are experimental visualization signals, not persisted database events. Zone entry, exit, and loitering are evaluated separately.
 
 The measurements represent image-space geometry rather than physical distance or velocity. The system does not infer an object's intent.
-
 
 ---
 
@@ -206,6 +207,8 @@ streamlit run src\dashboard.py
 
 ```text
 edge-situational-awareness/
+│── configs/
+│   └── zone.json
 │
 ├── data/
 │   ├── input/
@@ -224,6 +227,7 @@ edge-situational-awareness/
 │   ├── track_video.py
 │   ├── video_io.py
 │   ├── visualization.py
+│   ├── zone_editor.py
 │   └── zone.py
 │
 ├── tests/
@@ -332,14 +336,53 @@ data/input/intersection_v2.mp4
 
 Input and generated video files are excluded from Git. Users must provide their own compatible video and update `INPUT_VIDEO` in `src/config.py` if necessary.
 
+#### Interactive Zone Configuration (SP14)
+
+The controlled zone can be configured visually without modifying Python source code.
+
+Open the interactive zone editor:
+
+```powershell
+python src/zone_editor.py
+```
+
+The editor displays the first frame of the configured input video and loads the currently saved polygon.
+
+**Editor controls:**
+
+- **Left click:** Add a polygon vertex
+- **C:** Clear all vertices
+- **U:** Undo the last vertex
+- **S:** Validate and save the polygon
+- **Q / ESC:** Exit without saving
+
+The editor stores normalized coordinates in `configs/zone.json`, allowing the polygon to be scaled to the input video's resolution.
+
+Example configuration:
+
+```json
+{
+  "name": "CONTROLLED_ZONE",
+  "normalized_points": [
+    [0.3, 0.55],
+    [0.7, 0.55],
+    [0.85, 0.92],
+    [0.15, 0.92]
+  ]
+}
+```
+
+The video pipeline automatically loads and validates this configuration before processing begins.
+
+Invalid coordinates, duplicate vertices, degenerate polygons, and self-intersecting polygon edges are rejected.
+
+The current implementation supports one controlled zone. Vertex dragging and multiple-zone configuration are not yet available.
 
 ### 4. Run the analytics pipeline
 
 ```powershell
 python src\track_video.py
 ```
-
-The pipeline generates:
 
 The current configuration generates:
 
@@ -350,7 +393,6 @@ data/output/evidence/run_<uuid>/*.jpg
 ```
 
 Output paths are configurable in `src/config.py`.
-
 
 ### 5. Start the dashboard
 
@@ -471,11 +513,14 @@ Current tests cover:
 - inside-zone motion across the zone center
 - zone-boundary-relative approaching and moving-away classification
 - cases where zone-center and boundary-based motion estimates disagree
-
-Current test suite:
+- JSON zone configuration loading and saving
+- invalid polygon configuration rejection
+- self-intersecting polygon rejection
+- valid concave polygon acceptance
+  Current test suite:
 
 ```text
-34 tests passed
+40 tests passed
 ```
 
 Previously measured deterministic core coverage (SP9 baseline; not recalculated for the current test suite):
@@ -507,7 +552,6 @@ Run core coverage with:
 ```powershell
 python -m pytest --cov=src.events --cov=src.storage --cov=src.zone --cov-report=term-missing
 ```
-
 
 SP13 adds six motion-related test cases covering stationary behavior, positional jitter, inside-zone movement, boundary-relative approach and departure, and a center-versus-boundary disagreement scenario.
 
@@ -619,9 +663,15 @@ Development is currently focused on **verification and evaluation before additio
 - Motion regression tests
 - Video pipeline integration and visual validation
 
+### Completed — SP14
+
+- JSON-based zone configuration
+- Interactive mouse-based polygon editor
+- Zone configuration integration with the video pipeline
+- Polygon validation and regression tests
+
 ### Planned work
 
-- configuration-based zone definitions
 - small ground-truth event evaluation
 - precision / recall and timing-error analysis
 - documented failure-case analysis
@@ -665,6 +715,6 @@ Golden replay regression testing
 GitHub Actions CI
 ```
 
-Current automated test suite: **27 passing tests**.
+Current automated test suite: **40 passing tests**.
 
 The current development phase is focused on testing, validation, evaluation, and failure analysis before adding further system complexity.
