@@ -246,3 +246,78 @@ def test_exit_and_reentry_start_new_loitering_period():
     assert event_types.count("LOITERING") == 2
     assert event_types.count("ZONE_EXIT") == 1
     assert event_types.count("ZONE_ENTRY") == 1
+def test_stale_track_state_is_removed_without_exit():
+    engine = make_engine(loitering_seconds=1.0)
+
+    for frame in range(25):
+        update(engine, inside=True, frame_number=frame)
+
+    assert 1 in engine.loitering_reported
+
+    expired = engine.expire_stale_tracks(
+        frame_number=29,
+        max_missing_frames=3,
+    )
+
+    assert expired == [1]
+    assert 1 not in engine.last_seen_frame
+    assert 1 not in engine.zone_state
+    assert 1 not in engine.zone_candidate_state
+    assert 1 not in engine.zone_candidate_count
+    assert 1 not in engine.zone_enter_frame
+    assert 1 not in engine.loitering_reported
+    assert 1 not in engine.motion_position_history
+    assert 1 not in engine.motion_distance_history
+    assert engine.zone_exit_count == 0
+
+
+def test_short_tracking_gap_preserves_state():
+    engine = make_engine()
+
+    update(engine, inside=False, frame_number=0)
+
+    expired = engine.expire_stale_tracks(
+        frame_number=3,
+        max_missing_frames=3,
+    )
+
+    assert expired == []
+    assert 1 in engine.zone_state
+
+    update(engine, inside=True, frame_number=3)
+    update(engine, inside=True, frame_number=4)
+    events = update(
+        engine, inside=True, frame_number=5
+    )
+
+    assert len(events) == 1
+    assert events[0]["event_type"] == "ZONE_ENTRY"
+
+
+def test_expired_track_starts_with_fresh_state():
+    engine = make_engine()
+
+    update(engine, inside=True, frame_number=0)
+
+    engine.expire_stale_tracks(
+        frame_number=4,
+        max_missing_frames=3,
+    )
+
+    events = update(
+        engine, inside=True, frame_number=4
+    )
+
+    assert events == []
+    assert engine.zone_enter_frame[1] == 5
+    assert engine.zone_entry_count == 0
+
+
+def test_invalid_stale_timeout_is_rejected():
+    engine = make_engine()
+
+    with pytest.raises(ValueError):
+        engine.expire_stale_tracks(
+            frame_number=10,
+            max_missing_frames=0,
+        )

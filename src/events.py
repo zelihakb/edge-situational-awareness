@@ -54,7 +54,7 @@ class TrackEventEngine:
         )
         self.zone_entry_count = 0
         self.zone_exit_count = 0
-
+        self.last_seen_frame: dict[int, int] = {}
     def update(
         self,
         track_id: int,
@@ -63,7 +63,7 @@ class TrackEventEngine:
         frame_number: int,
     ) -> tuple[str, list[dict]]:
         """Update one track and return its motion label plus any new events."""
-
+        self.last_seen_frame[track_id] = frame_number
         current_frame = frame_number + 1
         events: list[dict] = []
 
@@ -87,7 +87,40 @@ class TrackEventEngine:
         )
 
         return motion_direction, events
+    def expire_stale_tracks(
+        self,
+        frame_number: int,
+        max_missing_frames: int,
+    ) -> list[int]:
+        """Remove stale track state without emitting exit events."""
 
+        if (
+            type(max_missing_frames) is not int
+            or max_missing_frames < 1
+        ):
+            raise ValueError(
+                "max_missing_frames must be a positive integer."
+            )
+
+        expired_ids = [
+            track_id
+            for track_id, last_frame in self.last_seen_frame.items()
+            if frame_number - last_frame > max_missing_frames
+        ]
+
+        for track_id in expired_ids:
+            self.last_seen_frame.pop(track_id, None)
+            self.zone_state.pop(track_id, None)
+            self.zone_candidate_state.pop(track_id, None)
+            self.zone_candidate_count.pop(track_id, None)
+            self.zone_enter_frame.pop(track_id, None)
+
+            self.loitering_reported.discard(track_id)
+
+            self.motion_position_history.pop(track_id, None)
+            self.motion_distance_history.pop(track_id, None)
+
+        return expired_ids
     def _update_motion(
         self,
         track_id: int,
