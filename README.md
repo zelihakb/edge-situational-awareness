@@ -220,6 +220,7 @@ edge-situational-awareness/
 │   ├── detect_image.py
 │   ├── evidence.py
 │   ├── events.py
+│   ├── evaluation.py
 │   ├── metrics.py
 │   ├── review_event.py
 │   ├── replay_events.py
@@ -233,9 +234,10 @@ edge-situational-awareness/
 ├── tests/
 │   ├── test_events.py
 │   ├── test_storage.py
-│   └── test_zone.py
+│   ├── test_zone.py
 │   ├── test_evidence.py
-│   └── test_replay.py
+│   ├── test_evaluation.py
+│   ├── test_replay.py
 │   ├── test_motion.py
 │   └── fixtures/
 │       ├── sample_tracks.jsonl
@@ -517,10 +519,13 @@ Current tests cover:
 - invalid polygon configuration rejection
 - self-intersecting polygon rejection
 - valid concave polygon acceptance
-  Current test suite:
+- precision, recall, and F1 metric calculations
+- one-to-one temporal event matching with frame tolerance
+
+Current test suite:
 
 ```text
-40 tests passed
+47 tests passed
 ```
 
 Previously measured deterministic core coverage (SP9 baseline; not recalculated for the current test suite):
@@ -537,7 +542,7 @@ The lower coverage in `zone.py` is primarily caused by OpenCV rendering operatio
 
 Repository-wide source coverage is currently lower because UI, video I/O, orchestration, and visualization modules are not yet covered by unit tests. Coverage is therefore reported separately for the deterministic core logic.
 
-A golden replay integration test also replays 5,190 recorded observations from a real YOLO + ByteTrack run through the event engine and compares the resulting 20 events against a frozen expected-event fixture. This provides deterministic regression coverage for the tracker-to-event boundary without requiring the model, GPU, or source video in CI.
+A golden replay integration test also replays 5,195 recorded observations from a real YOLO + ByteTrack run through the event engine and compares the resulting 20 events against a frozen expected-event fixture. This provides deterministic regression coverage for the tracker-to-event boundary without requiring the model, GPU, or source video in CI.
 
 The replay fixture is a regression baseline rather than ground-truth accuracy evaluation.
 
@@ -555,8 +560,23 @@ python -m pytest --cov=src.events --cov=src.storage --cov=src.zone --cov-report=
 
 SP13 adds six motion-related test cases covering stationary behavior, positional jitter, inside-zone movement, boundary-relative approach and departure, and a center-versus-boundary disagreement scenario.
 
-The golden replay fixture remains a deterministic regression baseline rather than a ground-truth accuracy evaluation.
+### SP15 — Event Evaluation Infrastructure
 
+SP15.1 introduces precision, recall, and F1 calculations
+from true-positive, false-positive, and false-negative counts.
+
+SP15.2 introduces one-to-one temporal event matching using
+event types, frame numbers, and configurable frame tolerance.
+
+The matcher maximizes the number of matches and minimizes
+total timing differences among equally sized matches.
+
+Current limitations:
+- Matching is not object-identity aware.
+- Independently annotated ground truth is not yet available.
+- Reported metrics have not been validated on real video.
+
+Ground-truth evaluation and failure analysis remain future work.
 ---
 
 ## Design Decisions
@@ -715,6 +735,6 @@ Golden replay regression testing
 GitHub Actions CI
 ```
 
-Current automated test suite: **40 passing tests**.
+Current automated test suite: **47 passing tests**.
 
 The current development phase is focused on testing, validation, evaluation, and failure analysis before adding further system complexity.

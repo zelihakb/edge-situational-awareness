@@ -10,3 +10,7 @@ yolo11n.pt
 *.avi
 
 .vscode/
+
+.coverage
+.pytest_cache/
+htmlcov/
