@@ -29,3 +29,51 @@ def test_real_tracking_replay_matches_expected_events():
     )
 
     assert actual_events == expected_events
+
+
+def test_replay_applies_stale_track_timeout():
+    metadata, _ = load_replay(REPLAY_PATH)
+
+    records = [
+        {
+            "track_id": 1,
+            "zone_point": [100, 100],
+            "inside_zone": True,
+            "frame_number": 0,
+        },
+        {
+            "track_id": 1,
+            "zone_point": [100, 100],
+            "inside_zone": False,
+            "frame_number": 10,
+        },
+        {
+            "track_id": 1,
+            "zone_point": [100, 100],
+            "inside_zone": False,
+            "frame_number": 11,
+        },
+        {
+            "track_id": 1,
+            "zone_point": [100, 100],
+            "inside_zone": False,
+            "frame_number": 12,
+        },
+    ]
+
+    without_cleanup = replay_events(metadata, records)
+
+    with_cleanup = replay_events(
+        {
+            **metadata,
+            "track_stale_timeout_frames": 3,
+        },
+        records,
+    )
+
+    assert [
+        event["event_type"]
+        for event in without_cleanup
+    ] == ["ZONE_EXIT"]
+
+    assert with_cleanup == []

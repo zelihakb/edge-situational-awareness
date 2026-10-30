@@ -28,6 +28,7 @@ from config import (
     EVIDENCE_DIR,
     PROJECT_ROOT,
     ZONE_CONFIG_PATH,
+    TRACK_STALE_TIMEOUT_SECONDS,
 )
 from evidence import save_event_snapshot
 from events import TrackEventEngine
@@ -337,7 +338,10 @@ def main() -> None:
             ),
         )
     )
-
+    stale_timeout_frames = max(
+    1,
+    round(source_fps * TRACK_STALE_TIMEOUT_SECONDS),
+)
     metrics = PipelineMetrics(
         fps_window=FPS_WINDOW,
         benchmark_skip_frames=(
@@ -370,6 +374,7 @@ def main() -> None:
         metadata = {
             "record_type": "metadata",
             "source_fps": source_fps,
+            "track_stale_timeout_frames": stale_timeout_frames,
             "zone_center": zone_center.tolist(),
             "zone_confirm_frames": ZONE_CONFIRM_FRAMES,
             "loitering_threshold_seconds": LOITERING_THRESHOLD_SECONDS,
@@ -399,7 +404,10 @@ def main() -> None:
 
             if not success:
                 break
-
+            event_engine.expire_stale_tracks(
+                frame_number=metrics.frame_count,
+                max_missing_frames=stale_timeout_frames,
+            )
             # ---------------------------------------------
             # YOLO + BYTETRACK
             # ---------------------------------------------

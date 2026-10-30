@@ -76,10 +76,27 @@ def replay_events(
     event_engine = build_event_engine(
         metadata
     )
+    stale_timeout_frames = metadata.get(
+    "track_stale_timeout_frames"
+)
+    last_replay_frame = None
 
     emitted_events: list[dict] = []
 
     for record in track_records:
+        frame_number = int(record["frame_number"])
+
+        if (
+            stale_timeout_frames is not None
+            and frame_number != last_replay_frame
+        ):
+            event_engine.expire_stale_tracks(
+                frame_number=frame_number,
+                max_missing_frames=int(stale_timeout_frames),
+            )
+
+        last_replay_frame = frame_number
+
         _, events = event_engine.update(
             track_id=int(
                 record["track_id"]
@@ -91,9 +108,7 @@ def replay_events(
             inside_zone=bool(
                 record["inside_zone"]
             ),
-            frame_number=int(
-                record["frame_number"]
-            ),
+            frame_number=frame_number,
         )
 
         emitted_events.extend(
