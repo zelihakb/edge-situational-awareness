@@ -529,7 +529,7 @@ Current tests cover:
 Current test suite:
 
 ```text
-57 tests passed
+72 tests passed
 ```
 
 Previously measured deterministic core coverage (SP9 baseline; not recalculated for the current test suite):
@@ -602,6 +602,27 @@ relying on the current zone configuration.
 Processed MP4 output currently uses a fixed destination and may
 be overwritten by subsequent runs. The run manifest does not
 preserve a separate copy of that video.
+
+### Evaluation Input Validation (SP18)
+
+Evaluation functions validate event records before matching.
+
+Each event must contain:
+
+- A non-empty `event_type` string.
+- A non-negative integer `frame_number`.
+
+Ground truth and prediction inputs must be lists of event
+dictionaries. Invalid inputs raise a descriptive `ValueError`.
+
+Event counts must be non-negative integers. Boolean values
+and floating-point counts are rejected.
+
+Empty event collections are supported. Undefined precision,
+recall, and F1 ratios are reported as `0.0`.
+
+These validation rules help prevent malformed annotations
+from producing misleading evaluation results.
 
 ---
 
@@ -761,6 +782,6 @@ Golden replay regression testing
 GitHub Actions CI
 ```
 
-Current automated test suite: **57 passing tests**.
+Current automated test suite: **72 passing tests**.
 
 The current development phase is focused on testing, validation, evaluation, and failure analysis before adding further system complexity.

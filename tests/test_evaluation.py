@@ -160,4 +160,4 @@ def test_event_matching_handles_empty_inputs(
         predictions,
     )
 
-    assert result == expected        
+    assert result == expected
