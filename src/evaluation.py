@@ -3,7 +3,11 @@ def calculate_event_metrics(
     fp: int,
     fn: int,
 ) -> dict[str, float]:
-    """Calculate event detection precision, recall and F1."""
+    """Calculate precision, recall and F1 from event counts.
+
+Counts must be non-negative integers.
+Undefined ratios with zero denominators are reported as 0.0.
+"""
 
     if any(type(n) is not int or n < 0 for n in (tp, fp, fn)):
         raise ValueError("Event counts must be non-negative integers.")
@@ -22,6 +26,30 @@ def calculate_event_metrics(
         "recall": recall,
         "f1": f1,
     }
+def _validate_event_records(events: list[dict], source: str) -> None:
+    """Validate event records before matching."""
+
+    if not isinstance(events, list):
+        raise ValueError(f"{source} must be a list.")
+
+    for index, event in enumerate(events):
+        if not isinstance(event, dict):
+            raise ValueError(
+                f"{source}[{index}] must be a dictionary."
+            )
+
+        event_type = event.get("event_type")
+        frame_number = event.get("frame_number")
+
+        if not isinstance(event_type, str) or not event_type.strip():
+            raise ValueError(
+                f"{source}[{index}] has an invalid event_type."
+            )
+
+        if type(frame_number) is not int or frame_number < 0:
+            raise ValueError(
+                f"{source}[{index}] has an invalid frame_number."
+            )
 def match_event_counts(
     ground_truth: list[dict],
     predictions: list[dict],
@@ -31,6 +59,8 @@ def match_event_counts(
 
     if type(tolerance_frames) is not int or tolerance_frames < 0:
         raise ValueError("Frame tolerance must be a non-negative integer.")
+    _validate_event_records(ground_truth, "ground_truth")
+    _validate_event_records(predictions, "predictions")
 
     matched = 0
 

@@ -96,3 +96,68 @@ def test_different_event_types_do_not_match():
     counts = match_event_counts(ground_truth, predictions)
 
     assert counts == {"tp": 0, "fp": 1, "fn": 1}
+
+@pytest.mark.parametrize(
+    ("ground_truth", "predictions"),
+    [
+        ([{"event_type": "ZONE_ENTRY"}], []),
+        ([], [{"event_type": "ZONE_ENTRY", "frame_number": True}]),
+        ([{"event_type": "", "frame_number": 10}], []),
+        ([], [{"event_type": "ZONE_EXIT", "frame_number": -1}]),
+        (["invalid event"], []),
+        ([], "invalid input"),
+    ],
+)
+def test_invalid_event_inputs_raise_value_error(
+    ground_truth,
+    predictions,
+):
+    with pytest.raises(ValueError):
+        match_event_counts(ground_truth, predictions)
+@pytest.mark.parametrize(
+    ("tp", "fp", "fn"),
+    [
+        (True, 0, 0),
+        (0, False, 0),
+        (0, 0, True),
+        (1.0, 0, 0),
+        (0, "1", 0),
+        (0, 0, None),
+    ],
+)
+def test_event_metrics_reject_invalid_counts(tp, fp, fn):
+    with pytest.raises(ValueError):
+        calculate_event_metrics(tp, fp, fn)
+
+
+@pytest.mark.parametrize(
+    ("ground_truth", "predictions", "expected"),
+    [
+        (
+            [],
+            [],
+            {"tp": 0, "fp": 0, "fn": 0},
+        ),
+        (
+            [{"event_type": "ZONE_ENTRY", "frame_number": 10}],
+            [],
+            {"tp": 0, "fp": 0, "fn": 1},
+        ),
+        (
+            [],
+            [{"event_type": "ZONE_ENTRY", "frame_number": 10}],
+            {"tp": 0, "fp": 1, "fn": 0},
+        ),
+    ],
+)
+def test_event_matching_handles_empty_inputs(
+    ground_truth,
+    predictions,
+    expected,
+):
+    result = match_event_counts(
+        ground_truth,
+        predictions,
+    )
+
+    assert result == expected        
