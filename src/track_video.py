@@ -31,6 +31,10 @@ from config import (
     TRACK_STALE_TIMEOUT_SECONDS,
 )
 from evidence import save_event_snapshot
+from run_manifest import (
+    build_run_manifest,
+    save_run_manifest,
+)
 from events import TrackEventEngine
 from metrics import PipelineMetrics
 from storage import EventStore
@@ -355,9 +359,41 @@ def main() -> None:
     event_store = EventStore(
     EVENT_DB_PATH
     )
-    evidence_run_dir = (
-        EVIDENCE_DIR / f"run_{uuid4().hex}"
+    run_id = f"run_{uuid4().hex}"
+
+    evidence_run_dir = EVIDENCE_DIR / run_id
+
+    run_manifest = build_run_manifest(
+        input_video=INPUT_VIDEO,
+        model_path=MODEL_PATH,
+        zone_config_path=ZONE_CONFIG_PATH,
+        frame_width=frame_width,
+        frame_height=frame_height,
+        source_fps=source_fps,
+        total_frames=total_frames,
+        settings={
+            "confidence_threshold": CONFIDENCE_THRESHOLD,
+            "image_size": IMAGE_SIZE,
+            "target_classes": TARGET_CLASSES,
+            "zone_confirm_frames": ZONE_CONFIRM_FRAMES,
+            "loitering_threshold_seconds": LOITERING_THRESHOLD_SECONDS,
+            "motion_history_length": MOTION_HISTORY_LENGTH,
+            "motion_min_delta_ratio": MOTION_MIN_DELTA_RATIO,
+            "track_stale_timeout_seconds": TRACK_STALE_TIMEOUT_SECONDS,
+            "track_stale_timeout_frames": stale_timeout_frames,
+        },
+        run_id=run_id,
     )
+
+    manifest_path = save_run_manifest(
+        run_manifest,
+        evidence_run_dir / "manifest.json",
+    )
+
+    zone_name = run_manifest["zone_config"]["name"]
+
+    print(f"Run ID        : {run_id}")
+    print(f"Run manifest  : {manifest_path}")
     replay_file = None
 
     if REPLAY_CAPTURE_ENABLED:
@@ -645,15 +681,14 @@ def main() -> None:
                                     "event_type"
                                 ]
                             ),
-                            zone_name=(
-                                "CONTROLLED_ZONE"
-                            ),
+                            zone_name=zone_name,
                             duration_seconds=(
                                 event.get(
                                     "duration_seconds"
                                 )
                             ),
                             evidence_path=evidence_path,
+                            run_id=run_id,
                         )
 
                         print(
