@@ -224,6 +224,7 @@ edge-situational-awareness/
 │   ├── metrics.py
 │   ├── review_event.py
 │   ├── replay_events.py
+│   ├── run_manifest.py
 │   ├── storage.py
 │   ├── track_video.py
 │   ├── video_io.py
@@ -239,6 +240,8 @@ edge-situational-awareness/
 │   ├── test_evaluation.py
 │   ├── test_replay.py
 │   ├── test_motion.py
+│   ├── test_run_manifest.py
+│   ├── test_run_integration.py
 │   └── fixtures/
 │       ├── sample_tracks.jsonl
 │       └── expected_events.json
@@ -392,6 +395,7 @@ The current configuration generates:
 data/output/tracked_intersection_v2.mp4
 data/output/events_intersection_v2.db
 data/output/evidence/run_<uuid>/*.jpg
+data/output/evidence/run_<uuid>/manifest.json
 ```
 
 Output paths are configurable in `src/config.py`.
@@ -525,7 +529,7 @@ Current tests cover:
 Current test suite:
 
 ```text
-47 tests passed
+57 tests passed
 ```
 
 Previously measured deterministic core coverage (SP9 baseline; not recalculated for the current test suite):
@@ -572,11 +576,33 @@ The matcher maximizes the number of matches and minimizes
 total timing differences among equally sized matches.
 
 Current limitations:
+
 - Matching is not object-identity aware.
 - Independently annotated ground truth is not yet available.
 - Reported metrics have not been validated on real video.
 
 Ground-truth evaluation and failure analysis remain future work.
+
+### Run Identification and Reproducibility (SP17)
+
+Each video processing run receives a unique `run_id`.
+
+Events are associated with that run through the SQLite `run_id`
+column. Legacy events retain NULL run IDs.
+
+A run-specific JSON manifest records the input video and model
+SHA-256 hashes, video metadata, controlled-zone configuration,
+and relevant processing settings.
+
+The manifest is saved alongside the run's JPEG evidence files.
+
+This enables historical processing runs to be inspected without
+relying on the current zone configuration.
+
+Processed MP4 output currently uses a fixed destination and may
+be overwritten by subsequent runs. The run manifest does not
+preserve a separate copy of that video.
+
 ---
 
 ## Design Decisions
@@ -735,6 +761,6 @@ Golden replay regression testing
 GitHub Actions CI
 ```
 
-Current automated test suite: **47 passing tests**.
+Current automated test suite: **57 passing tests**.
 
 The current development phase is focused on testing, validation, evaluation, and failure analysis before adding further system complexity.
