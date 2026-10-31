@@ -45,7 +45,8 @@ class EventStore:
                 duration_seconds REAL,
                 review_status TEXT NOT NULL DEFAULT 'review',
                 reviewed_at TEXT,
-                evidence_path TEXT
+                evidence_path TEXT,
+                run_id TEXT
             )
             """
         )
@@ -78,6 +79,10 @@ class EventStore:
                 ALTER TABLE events
                 ADD COLUMN evidence_path TEXT
                 """)
+        if "run_id" not in existing_columns:
+            self.connection.execute(
+                "ALTER TABLE events ADD COLUMN run_id TEXT"
+            )    
         self.connection.commit()
 
     def log_event(
@@ -93,6 +98,7 @@ class EventStore:
         zone_name: str,
         duration_seconds: float | None = None,
         evidence_path=None,
+        run_id: str | None = None,
     ) -> int:
         """Insert one event and return its generated database ID."""
 
@@ -113,10 +119,11 @@ class EventStore:
                 event_type,
                 zone_name,
                 duration_seconds,
-                evidence_path
+                evidence_path,
+                run_id
             )
 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 created_at,
@@ -130,6 +137,7 @@ class EventStore:
                 zone_name,
                 duration_seconds,
                 evidence_path,
+                run_id,
             ),
         )
 

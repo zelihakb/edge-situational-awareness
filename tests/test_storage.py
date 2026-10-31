@@ -7,7 +7,10 @@ from src.evidence import save_event_snapshot
 from src.storage import EventStore
 
 
-def log_sample_event(store: EventStore) -> int:
+def log_sample_event(
+    store: EventStore,
+    run_id: str | None = None,
+) -> int:
     """Insert one deterministic event for storage tests."""
     return store.log_event(
         video_time_seconds=3.0,
@@ -19,6 +22,7 @@ def log_sample_event(store: EventStore) -> int:
         event_type="LOITERING",
         zone_name="CONTROLLED_ZONE",
         duration_seconds=3.0,
+        run_id=run_id,
     )
 
 
@@ -184,7 +188,6 @@ def test_updating_missing_event_returns_false(tmp_path):
 
 def test_legacy_database_is_migrated_without_losing_events(tmp_path):
     database_path = tmp_path / "legacy_events.db"
-
     connection = sqlite3.connect(database_path)
 
     connection.execute(
@@ -241,14 +244,14 @@ def test_legacy_database_is_migrated_without_losing_events(tmp_path):
     # Opening the legacy database should automatically apply
     # the lightweight review-column migration.
     store = EventStore(database_path)
-
+    
     columns = {
         row[1]
         for row in store.connection.execute(
             "PRAGMA table_info(events)"
-        )
+        ).fetchall()
     }
-
+    assert "run_id" in columns
     row = store.connection.execute(
         """
         SELECT
@@ -383,3 +386,27 @@ def test_saved_snapshot_is_linked_to_event(tmp_path):
 
         finally:
             store.close()
+
+def test_events_are_associated_with_run_ids(tmp_path):
+    store = EventStore(tmp_path / "events.db")
+
+    try:
+        first = log_sample_event(store, run_id="run_a")
+        second = log_sample_event(store, run_id="run_b")
+        legacy = log_sample_event(store)
+
+        rows = store.connection.execute(
+            """
+            SELECT event_id, run_id
+            FROM events
+            ORDER BY event_id
+            """
+        ).fetchall()
+
+        assert rows == [
+            (first, "run_a"),
+            (second, "run_b"),
+            (legacy, None),
+        ]
+    finally:
+        store.close()            
